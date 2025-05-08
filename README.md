@@ -1,3 +1,5 @@
+Get needed keys for config using: python -m tinytuya wizard
+
 Get values using power_monitor_working.py (tinytua)
 Run site from python app.py (flask)
 
