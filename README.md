@@ -1,5 +1,5 @@
 # Smart Socket Statistics
-
+![alt text]([https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png](https://github.com/mamalakic/Tuya-Socket-Statistics/blob/main/docs/demo.png) "Tuya Socket Metering demo")
 
 ## Description
 Power consumption metering with graphs and calculate electricity costs. Uses tinytuya for local access to the smart device (socket) and the flask framework for a minimal site.
