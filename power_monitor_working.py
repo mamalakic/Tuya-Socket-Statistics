@@ -100,7 +100,7 @@ def main():
 
                 # Get Status
                 data = device.status() 
-                print('set_status() result %r' % data)
+                print('%r' % data)
                 current_time = strftime("%Y-%m-%d %H:%M:%S")
 
                 # https://github.com/jasonacox/tinytuya?tab=readme-ov-file#version-33---plug-switch-power-strip-type

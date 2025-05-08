@@ -281,6 +281,10 @@
                 <input type="checkbox" id="showGpu" onchange="toggleGpu()">
                 <label for="showGpu">Show GPU Usage</label>
             </div>
+            <div class="gpu-toggle">
+                <input type="checkbox" id="recordStats" onchange="toggleRecording()">
+                <label for="recordStats">Record Statistics</label>
+            </div>
             <button id="resetZoom" onclick="resetZoom()">Reset Graph</button>
             <span class="zoom-status" id="zoomStatus"></span>
         </div>
@@ -566,6 +570,12 @@
                     updateChart();
                     updateCurrentTime();
                     updateCostDisplay();
+                    // Check recording status
+                    fetch('/recording_status')
+                        .then(response => response.json())
+                        .then(data => {
+                            document.getElementById('recordStats').checked = data.is_recording;
+                        });
                 }
             }, 5000);
         }
@@ -574,10 +584,40 @@
             updateChart();
         }
 
+        function toggleRecording() {
+            const checkbox = document.getElementById('recordStats');
+            const isRecording = checkbox.checked;
+            
+            fetch('/toggle_recording', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ record: isRecording })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    console.error('Error toggling recording:', data.error);
+                    checkbox.checked = !isRecording; // Revert the checkbox if there was an error
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                checkbox.checked = !isRecording; // Revert the checkbox if there was an error
+            });
+        }
+
         // Initial load
         updateChart();
         updateCurrentTime();
         updateCostDisplay();
+        // Check initial recording status
+        fetch('/recording_status')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('recordStats').checked = data.is_recording;
+            });
         startAutoUpdate();
     </script>
 </body>

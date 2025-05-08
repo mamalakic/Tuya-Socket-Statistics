@@ -2,8 +2,14 @@ from flask import Flask, render_template, jsonify, request
 import json
 from datetime import datetime, timedelta
 import os
+import subprocess
+import signal
+import psutil
 
 app = Flask(__name__)
+
+# Global variable to store the power monitor process
+power_monitor_process = None
 
 def format_timestamp(timestamp_str):
     try:
@@ -138,6 +144,44 @@ def update_cost():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/toggle_recording', methods=['POST'])
+def toggle_recording():
+    global power_monitor_process
+    try:
+        data = request.json
+        should_record = data.get('record', False)
+        
+        if should_record:
+            # Start the power monitor script if it's not already running
+            if power_monitor_process is None or power_monitor_process.poll() is not None:
+                power_monitor_process = subprocess.Popen(['python', 'power_monitor_working.py'])
+                return jsonify({'success': True, 'status': 'started'})
+        else:
+            # Stop the power monitor script if it's running
+            if power_monitor_process is not None and power_monitor_process.poll() is None:
+                # Find all child processes
+                parent = psutil.Process(power_monitor_process.pid)
+                children = parent.children(recursive=True)
+                
+                # Terminate child processes first
+                for child in children:
+                    child.terminate()
+                
+                # Terminate the main process
+                power_monitor_process.terminate()
+                power_monitor_process = None
+                return jsonify({'success': True, 'status': 'stopped'})
+        
+        return jsonify({'success': True, 'status': 'unchanged'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/recording_status')
+def recording_status():
+    global power_monitor_process
+    is_running = power_monitor_process is not None and power_monitor_process.poll() is None
+    return jsonify({'is_recording': is_running})
 
 if __name__ == '__main__':
     app.run(debug=True) 
