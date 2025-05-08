@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Monitor Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2196F3;
+            --primary-dark: #1976D2;
+            --success-color: #4CAF50;
+            --danger-color: #f44336;
+            --text-primary: #2c3e50;
+            --text-secondary: #7f8c8d;
+            --bg-primary: #f8f9fa;
+            --bg-secondary: #ffffff;
+            --border-radius: 12px;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto 20px;
+            background-color: var(--bg-secondary);
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--bg-primary);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .current-time {
+            font-size: 1.1em;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .controls {
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: var(--transition);
+            font-family: 'Inter', sans-serif;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        button:hover {
+            background-color: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+        }
+
+        button.active {
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+        }
+
+        button#resetZoom {
+            background-color: var(--danger-color);
+            color: white;
+            box-shadow: 0 2px 4px rgba(244, 67, 54, 0.2);
+        }
+
+        button#resetZoom:hover {
+            background-color: #d32f2f;
+            box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3);
+        }
+
+        .zoom-status {
+            color: var(--text-secondary);
+            font-style: italic;
+            font-size: 0.9em;
+        }
+
+        canvas {
+            width: 100% !important;
+            height: 400px !important;
+            margin: 20px 0;
+        }
+
+        .cost-input {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background-color: var(--bg-primary);
+            padding: 12px;
+            border-radius: 8px;
+            transition: var(--transition);
+        }
+
+        .input-group:hover {
+            box-shadow: var(--shadow);
+        }
+
+        .input-group label {
+            white-space: nowrap;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .input-group input {
+            padding: 8px 12px;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            width: 100px;
+            font-family: 'Inter', sans-serif;
+            transition: var(--transition);
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .cost-display {
+            margin-top: 30px;
+            padding: 30px;
+            background-color: var(--bg-primary);
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: flex-start;
+            gap: 40px;
+        }
+
+        .cost-title {
+            font-size: 1.3em;
+            color: var(--text-primary);
+            margin: 0;
+            padding-top: 5px;
+            font-weight: 600;
+        }
+
+        .cost-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, auto);
+            gap: 20px;
+            flex-grow: 1;
+        }
+
+        .cost-item {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 0;
+        }
+
+        .cost-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .cost-label {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            display: block;
+            font-weight: 500;
+        }
+
+        .cost-value {
+            font-size: 1.6em;
+            color: var(--primary-color);
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .cost-display {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            .cost-grid {
+                grid-template-columns: repeat(2, 1fr);
+                grid-template-rows: repeat(2, auto);
+            }
+            
+            .input-group {
+                width: 100%;
+            }
+            
+            .input-group input {
+                width: 100%;
+            }
+        }
+
+        .gpu-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background-color: var(--bg-primary);
+            padding: 8px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .gpu-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .gpu-toggle label {
+            color: var(--text-primary);
+            font-weight: 500;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Power Monitor Dashboard</h1>
+            <div class="current-time" id="currentTime"></div>
+        </div>
+        <div class="controls">
+            <button id="current_ma" onclick="switchMetric(this.id)">Current (mA)</button>
+            <button id="power_w" onclick="switchMetric(this.id)" class="active">Power (W)</button>
+            <button id="voltage_v" onclick="switchMetric(this.id)">Voltage (V)</button>
+            <div class="gpu-toggle">
+                <input type="checkbox" id="showGpu" onchange="toggleGpu()">
+                <label for="showGpu">Show GPU Usage</label>
+            </div>
+            <button id="resetZoom" onclick="resetZoom()">Reset Graph</button>
+            <span class="zoom-status" id="zoomStatus"></span>
+        </div>
+        <canvas id="powerChart"></canvas>
+    </div>
+
+    <div class="container">
+        <h2>Cost Estimation</h2>
+        <div class="cost-input">
+            <div class="input-group">
+                <label for="costInput">Electricity cost per kWh:</label>
+                <input type="number" id="costInput" step="0.01" min="0" placeholder="Enter cost" oninput="debouncedUpdateCost(this.value)">
+            </div>
+            <div class="input-group">
+                <label for="usageInput">Usage per day (hours):</label>
+                <input type="number" id="usageInput" step="0.5" min="0" max="24" value="24" oninput="debouncedUpdateCost()">
+            </div>
+        </div>
+        <div class="cost-display">
+            <p class="cost-title">This device costs approximately:</p>
+            <div class="cost-grid">
+                <div class="cost-item">
+                    <span class="cost-label">Daily</span>
+                    <span class="cost-value" id="dayCost">0.00€</span>
+                </div>
+                <div class="cost-item">
+                    <span class="cost-label">Weekly</span>
+                    <span class="cost-value" id="weekCost">0.00€</span>
+                </div>
+                <div class="cost-item">
+                    <span class="cost-label">Monthly</span>
+                    <span class="cost-value" id="monthCost">0.00€</span>
+                </div>
+                <div class="cost-item">
+                    <span class="cost-label">Yearly</span>
+                    <span class="cost-value" id="yearCost">0.00€</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chart;
+        let currentMetric = 'power_w';
+        let isZoomed = false;
+        let updateInterval;
+        let costUpdateTimeout;
+        let gpuDataset = null;
+        
+        function updateCurrentTime() {
+            const now = new Date();
+            const options = { 
+                month: 'short', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            };
+            document.getElementById('currentTime').textContent = now.toLocaleDateString('en-US', options);
+        }
+        
+        function createChart(data, metric) {
+            const ctx = document.getElementById('powerChart').getContext('2d');
+            
+            if (chart) {
+                chart.destroy();
+            }
+
+            // Filter out null values and create corresponding timestamps
+            const validData = [];
+            const validLabels = [];
+            data[metric].forEach((value, index) => {
+                if (value !== null) {
+                    validData.push(value);
+                    validLabels.push(data.timestamp[index]);
+                }
+            });
+
+            // Prepare GPU data if available
+            let gpuData = [];
+            if (data.gpu_usage) {
+                data.gpu_usage.forEach((value, index) => {
+                    if (value !== null) {
+                        gpuData.push(value);
+                    }
+                });
+            }
+
+            const datasets = [{
+                data: validData,
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                borderWidth: 2,
+                tension: 0.1,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                hitRadius: 20,
+                fill: true
+            }];
+
+            // Add GPU dataset if checkbox is checked
+            if (document.getElementById('showGpu').checked && gpuData.length > 0) {
+                datasets.push({
+                    data: gpuData,
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    hitRadius: 20,
+                    fill: true
+                });
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: validLabels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        zoom: {
+                            pan: {
+                                enabled: true,
+                                mode: 'x'
+                            },
+                            zoom: {
+                                wheel: {
+                                    enabled: true
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'x',
+                                onZoom: function() {
+                                    isZoomed = true;
+                                    updateZoomStatus();
+                                    if (updateInterval) {
+                                        clearInterval(updateInterval);
+                                        updateInterval = null;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 10
+                            }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            suggestedMin: function(context) {
+                                const values = context.chart.data.datasets[0].data;
+                                const min = Math.min(...values);
+                                return Math.max(0, min - (min * 0.1));
+                            },
+                            suggestedMax: function(context) {
+                                const values = context.chart.data.datasets[0].data;
+                                const max = Math.max(...values);
+                                return max + (max * 0.1);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function getMetricLabel(metric) {
+            switch(metric) {
+                case 'current_ma': return 'Current (mA)';
+                case 'power_w': return 'Power (W)';
+                case 'voltage_v': return 'Voltage (V)';
+                default: return metric;
+            }
+        }
+
+        function switchMetric(metric) {
+            currentMetric = metric;
+            updateChart();
+            
+            // Update button highlighting
+            document.querySelectorAll('.controls button').forEach(btn => {
+                btn.classList.remove('active');
+                console.log(`comparing ${btn.id.toLowerCase()} with ${metric}`)
+                if (btn.id.toLowerCase().includes(metric)) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        function updateChart() {
+            fetch('/data')
+                .then(response => response.json())
+                .then(data => {
+                    createChart(data, currentMetric);
+                });
+        }
+
+        function resetZoom() {
+            if (chart) {
+                chart.resetZoom();
+                isZoomed = false;
+                updateZoomStatus();
+                startAutoUpdate();
+            }
+        }
+
+        function updateZoomStatus() {
+            const statusElement = document.getElementById('zoomStatus');
+            if (isZoomed) {
+                statusElement.textContent = 'Graph zoomed - updates paused';
+            } else {
+                statusElement.textContent = '';
+            }
+        }
+
+        // Debounce function to prevent too many updates while typing
+        function debouncedUpdateCost(value) {
+            clearTimeout(costUpdateTimeout);
+            costUpdateTimeout = setTimeout(() => {
+                const cost = parseFloat(document.getElementById('costInput').value);
+                const usage = parseFloat(document.getElementById('usageInput').value);
+                if (!isNaN(cost) && cost >= 0 && !isNaN(usage) && usage >= 0 && usage <= 24) {
+                    updateCost(cost, usage);
+                }
+            }, 100);
+        }
+
+        function updateCost(cost, usage) {
+            fetch('/update_cost', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    cost: cost,
+                    usage_hours: usage
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateCostDisplay();
+                } else {
+                    console.error('Error updating cost:', data.error);
+                }
+            });
+        }
+
+        function updateCostDisplay() {
+            fetch('/costs')
+                .then(response => response.json())
+                .then(costs => {
+                    document.getElementById('dayCost').textContent = `${costs.day.toFixed(2)}€`;
+                    document.getElementById('weekCost').textContent = `${costs.week.toFixed(2)}€`;
+                    document.getElementById('monthCost').textContent = `${costs.month.toFixed(2)}€`;
+                    document.getElementById('yearCost').textContent = `${costs.year.toFixed(2)}€`;
+                });
+        }
+
+        function startAutoUpdate() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+            updateInterval = setInterval(() => {
+                if (!isZoomed) {
+                    updateChart();
+                    updateCurrentTime();
+                    updateCostDisplay();
+                }
+            }, 5000);
+        }
+
+        function toggleGpu() {
+            updateChart();
+        }
+
+        // Initial load
+        updateChart();
+        updateCurrentTime();
+        updateCostDisplay();
+        startAutoUpdate();
+    </script>
+</body>
+</html> 

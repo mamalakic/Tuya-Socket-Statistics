@@ -1,0 +1,7 @@
+{
+    "timestamp": "str",
+    "current_ma": "float",
+    "power_w": "float",
+    "voltage_v": "float",
+    "gpu_usage": "float"
+}
