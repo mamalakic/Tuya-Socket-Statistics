@@ -38,3 +38,4 @@ python compress_data.py
 
 ## Current issues
 - GPU usage metering works only for NVIDIA GPUs
+- Scroll/pan doesn't work https://www.chartjs.org/chartjs-plugin-zoom/samples/wheel/click-zoom.html

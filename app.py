@@ -1,10 +1,10 @@
 from flask import Flask, render_template, jsonify, request
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 import subprocess
-import signal
 import psutil
+from collections import defaultdict
 
 app = Flask(__name__)
 
@@ -31,33 +31,48 @@ def load_column_config():
         'gpu_usage': 'float'
     }
 
-def read_power_data():
+def read_power_data(avg='5s'):
     columns = load_column_config()
     data = {col: [] for col in columns.keys()}
-    
     try:
         with open('power_data.json', 'r') as f:
             json_data = json.load(f)
-            
-            for entry in json_data:
-                # Format timestamp
-                if 'timestamp' in entry:
-                    data['timestamp'].append(format_timestamp(entry['timestamp']))
-                
-                # Convert numeric values
-                for col in columns.keys():
-                    if col != 'timestamp':
-                        value = entry.get(col)
-                        if value is not None:
-                            try:
-                                data[col].append(float(value))
-                            except (ValueError, TypeError):
+            if avg == '1m':
+                # TODO:
+                # Group by minute
+                grouped = defaultdict(list)
+                for entry in json_data:
+                    ts = entry.get('timestamp')
+                    if ts:
+                        minute = ts[:16]  # 'YYYY-MM-DD HH:MM'
+                        grouped[minute].append(entry)
+                for minute, entries in grouped.items():
+                    avg_entry = {'timestamp': minute + ':00'}
+                    for col in columns.keys():
+                        if col == 'timestamp':
+                            continue
+                        values = [float(e.get(col)) for e in entries if e.get(col) is not None]
+                        avg_entry[col] = sum(values)/len(values) if values else None
+                    for col in columns.keys():
+                        data[col].append(avg_entry.get(col) if col != 'timestamp' else avg_entry['timestamp'])
+            else:
+                for entry in json_data:
+                    # Format timestamp
+                    if 'timestamp' in entry:
+                        data['timestamp'].append(format_timestamp(entry['timestamp']))
+                    # Convert numeric values
+                    for col in columns.keys():
+                        if col != 'timestamp':
+                            value = entry.get(col)
+                            if value is not None:
+                                try:
+                                    data[col].append(float(value))
+                                except (ValueError, TypeError):
+                                    data[col].append(None)
+                            else:
                                 data[col].append(None)
-                        else:
-                            data[col].append(None)
     except FileNotFoundError:
         pass
-    
     return data
 
 def calculate_costs():
@@ -113,13 +128,99 @@ def calculate_costs():
             'year': 0
         }
 
+def calculate_power_statistics():
+    try:
+        with open('power_data.json', 'r') as f:
+            data = json.load(f)
+            
+        if not data:
+            return {
+                'total_kwh': 0,
+                'total_hours': 0,
+                'avg_kwh_per_day': 0,
+                'peak_power': 0,
+                'median_power': 0,
+                'min_power': 0,
+                'total_samples': 0
+            }
+            
+        # Convert timestamps to datetime objects
+        timestamps = [datetime.strptime(entry['timestamp'], "%Y-%m-%d %H:%M:%S") for entry in data if 'timestamp' in entry]
+        
+        if not timestamps:
+            return {
+                'total_kwh': 0,
+                'total_hours': 0,
+                'avg_kwh_per_day': 0,
+                'peak_power': 0,
+                'median_power': 0,
+                'min_power': 0,
+                'total_samples': 0
+            }
+            
+        # Calculate time span
+        start_time = min(timestamps)
+        end_time = max(timestamps)
+        total_hours = (end_time - start_time).total_seconds() / 3600
+        
+        # Calculate power statistics
+        power_values = [float(entry['power_w']) for entry in data if 'power_w' in entry and entry['power_w'] is not None]
+        
+        if not power_values:
+            return {
+                'total_kwh': 0,
+                'total_hours': 0,
+                'avg_kwh_per_day': 0,
+                'peak_power': 0,
+                'median_power': 0,
+                'min_power': 0,
+                'total_samples': 0
+            }
+            
+        # Calculate total kWh (assuming 5-second intervals between measurements)
+        total_kwh = sum(power_values) * (5/3600) / 1000  # Convert W to kW and multiply by hours
+        
+        # Calculate average kWh per day
+        days_recorded = total_hours / 24
+        avg_kwh_per_day = total_kwh / days_recorded if days_recorded > 0 else 0
+        
+        # Calculate median power
+        sorted_power = sorted(power_values)
+        n = len(sorted_power)
+        if n % 2 == 0:
+            median_power = (sorted_power[n//2 - 1] + sorted_power[n//2]) / 2
+        else:
+            median_power = sorted_power[n//2]
+        
+        return {
+            'total_kwh': round(total_kwh, 2),
+            'total_hours': round(total_hours, 1),
+            'avg_kwh_per_day': round(avg_kwh_per_day, 2),
+            'peak_power': round(max(power_values), 1),
+            'median_power': round(median_power, 1),
+            'min_power': round(min(power_values), 1),
+            'total_samples': len(power_values)
+        }
+    except Exception as e:
+        print(f"Error calculating power statistics: {e}")
+        return {
+            'total_kwh': 0,
+            'total_hours': 0,
+            'avg_kwh_per_day': 0,
+            'peak_power': 0,
+            'median_power': 0,
+            'min_power': 0,
+            'total_samples': 0
+        }
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/data')
 def get_data():
-    return jsonify(read_power_data())
+    avg = request.args.get('avg', '5s')
+    return jsonify(read_power_data(avg=avg))
 
 @app.route('/costs')
 def get_costs():
@@ -182,6 +283,22 @@ def recording_status():
     global power_monitor_process
     is_running = power_monitor_process is not None and power_monitor_process.poll() is None
     return jsonify({'is_recording': is_running})
+
+@app.route('/statistics')
+def get_statistics():
+    return jsonify(calculate_power_statistics())
+
+@app.route('/config')
+def get_config():
+    try:
+        with open('config.json', 'r') as f:
+            config = json.load(f)
+            return jsonify({
+                'electricity_cost_per_kwh': config.get('electricity_cost_per_kwh', 0),
+                'usage_hours': config.get('usage_hours', 24)
+            })
+    except Exception as e:
+        return jsonify({'electricity_cost_per_kwh': 0, 'usage_hours': 24, 'error': str(e)})
 
 if __name__ == '__main__':
     app.run(debug=True) 

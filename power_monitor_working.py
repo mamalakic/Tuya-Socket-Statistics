@@ -5,7 +5,6 @@ from time import strftime
 import json
 import os
 import subprocess
-import re
 
 config = dotenv_values(".env")
 
@@ -71,10 +70,6 @@ def save_data(timestamp, current, power, voltage, gpu_usage):
         
         # Add new entry
         data.append(new_entry)
-        
-        # Keep only last 1000 entries to prevent file from growing too large
-        if len(data) > 1000:
-            data = data[-1000:]
         
         # Write back to file
         with open(DATA_FILE, 'w') as f:
